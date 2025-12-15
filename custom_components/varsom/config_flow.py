@@ -161,11 +161,19 @@ class VarsomOptionsFlow(config_entries.OptionsFlow):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
 
-        # Get current values from config entry
-        current_county_id = self.config_entry.data.get(CONF_COUNTY_ID, "46")
-        current_warning_type = self.config_entry.data.get(CONF_WARNING_TYPE, DEFAULT_WARNING_TYPE)
-        current_lang = self.config_entry.data.get(CONF_LANG, DEFAULT_LANG)
-        current_municipality_filter = self.config_entry.data.get(CONF_MUNICIPALITY_FILTER, "")
+        # Get current values from config entry (options take precedence over data)
+        current_county_id = self.config_entry.options.get(
+            CONF_COUNTY_ID, self.config_entry.data.get(CONF_COUNTY_ID, "46")
+        )
+        current_warning_type = self.config_entry.options.get(
+            CONF_WARNING_TYPE, self.config_entry.data.get(CONF_WARNING_TYPE, DEFAULT_WARNING_TYPE)
+        )
+        current_lang = self.config_entry.options.get(
+            CONF_LANG, self.config_entry.data.get(CONF_LANG, DEFAULT_LANG)
+        )
+        current_municipality_filter = self.config_entry.options.get(
+            CONF_MUNICIPALITY_FILTER, self.config_entry.data.get(CONF_MUNICIPALITY_FILTER, "")
+        )
 
         data_schema = vol.Schema(
             {
