@@ -267,18 +267,33 @@ class VarsomAlertsSensor(CoordinatorEntity, SensorEntity):
         # Build alerts array
         alerts_list = []
         for alert in active_alerts:
+            # NVE API may have multiple ID fields - try to find the correct one for Varsom.no URL
             forecast_id = alert.get("Id", "")
+            master_id = alert.get("MasterId", "")
+            reg_obs_id = alert.get("RegObsId", "")
+            
+            # Log ID fields for debugging URL issues
+            _LOGGER.debug(
+                "Alert IDs - Id: %s, MasterId: %s, RegObsId: %s", 
+                forecast_id, master_id, reg_obs_id
+            )
+            
+            # Use MasterId if available, otherwise fall back to Id
+            # MasterId appears to be the correct ID for Varsom.no URLs
+            url_id = master_id if master_id else forecast_id
+            
             activity_level = alert.get("ActivityLevel", "1")
             
             # Construct varsom.no URL
             lang_path = "en" if self.coordinator.lang == "en" else ""
-            varsom_url = f"https://www.varsom.no/{lang_path}/flood-and-landslide-warning-service/forecastid/{forecast_id}".replace("//f", "/f") if forecast_id else None
+            varsom_url = f"https://www.varsom.no/{lang_path}/flood-and-landslide-warning-service/forecastid/{url_id}".replace("//f", "/f") if url_id else None
             
             # Get municipality list
             municipalities = [m.get("Name", "") for m in alert.get("MunicipalityList", [])]
             
             alert_dict = {
                 "id": forecast_id,
+                "master_id": master_id,
                 "level": int(activity_level),
                 "level_name": ACTIVITY_LEVEL_NAMES.get(activity_level, "unknown"),
                 "danger_type": alert.get("DangerTypeName", ""),
