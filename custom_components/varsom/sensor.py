@@ -57,10 +57,18 @@ async def async_setup_entry(
     coordinator = VarsomAlertsCoordinator(hass, county_id, county_name, warning_type, lang)
     await coordinator.async_config_entry_first_refresh()
     
-    # Create single sensor with all alerts in attributes
+    # Create sensors
     entities = [
-        VarsomAlertsSensor(coordinator, entry.entry_id, county_name, warning_type, municipality_filter),
+        # Main sensor with all county alerts
+        VarsomAlertsSensor(coordinator, entry.entry_id, county_name, warning_type, municipality_filter, is_main=True),
     ]
+    
+    # If municipality filter is set, create an additional "My Area" sensor
+    if municipality_filter:
+        entities.append(
+            VarsomAlertsSensor(coordinator, entry.entry_id, county_name, warning_type, municipality_filter, is_main=False)
+        )
+    
     async_add_entities(entities)
 
 
@@ -143,18 +151,29 @@ class VarsomAlertsCoordinator(DataUpdateCoordinator):
 class VarsomAlertsSensor(CoordinatorEntity, SensorEntity):
     """Representation of a Varsom Alerts sensor with all alerts in attributes."""
 
-    def __init__(self, coordinator: VarsomAlertsCoordinator, entry_id: str, county_name: str, warning_type: str, municipality_filter: str = ""):
+    def __init__(self, coordinator: VarsomAlertsCoordinator, entry_id: str, county_name: str, warning_type: str, municipality_filter: str = "", is_main: bool = True):
         """Initialize the sensor."""
         super().__init__(coordinator)
         
         # Create sensor name based on warning type
         warning_type_label = warning_type.replace("_", " ").title()
-        self._attr_name = f"Varsom {warning_type_label} {county_name}"
-        self._attr_unique_id = f"{entry_id}_alerts"
+        
+        if is_main:
+            # Main sensor shows all county alerts
+            self._attr_name = f"Varsom {warning_type_label} {county_name}"
+            self._attr_unique_id = f"{entry_id}_alerts"
+            self._use_filter = False
+        else:
+            # Filtered sensor shows only selected municipalities
+            self._attr_name = f"Varsom {warning_type_label} My Area"
+            self._attr_unique_id = f"{entry_id}_alerts_filtered"
+            self._use_filter = True
+        
         self._attr_has_entity_name = False
         self._county_name = county_name
         self._warning_type = warning_type
         self._municipality_filter = municipality_filter.strip()
+        self._is_main = is_main
     
     def _filter_alerts(self, alerts):
         """Filter alerts by municipality if filter is set."""
@@ -200,12 +219,12 @@ class VarsomAlertsSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return "1"  # Green - no alerts
         
-        # Apply municipality filter if set
-        filtered_data = self._filter_alerts(self.coordinator.data)
+        # Apply municipality filter if this is the filtered sensor
+        data_to_use = self._filter_alerts(self.coordinator.data) if self._use_filter else self.coordinator.data
         
         # Filter out green level (1) alerts
         active_alerts = [
-            alert for alert in filtered_data
+            alert for alert in data_to_use
             if alert.get("ActivityLevel", "1") != "1"
         ]
         
@@ -227,15 +246,15 @@ class VarsomAlertsSensor(CoordinatorEntity, SensorEntity):
                 "alerts": [],
                 "county_name": self._county_name,
                 "county_id": self.coordinator.county_id,
-                "municipality_filter": self._municipality_filter,
+                "municipality_filter": self._municipality_filter if self._use_filter else None,
             }
         
-        # Apply municipality filter if set
-        filtered_data = self._filter_alerts(self.coordinator.data)
+        # Apply municipality filter if this is the filtered sensor
+        data_to_use = self._filter_alerts(self.coordinator.data) if self._use_filter else self.coordinator.data
         
         # Filter out green level (1) alerts
         active_alerts = [
-            alert for alert in filtered_data
+            alert for alert in data_to_use
             if alert.get("ActivityLevel", "1") != "1"
         ]
         
@@ -287,7 +306,7 @@ class VarsomAlertsSensor(CoordinatorEntity, SensorEntity):
             "alerts": alerts_list,
             "county_name": self._county_name,
             "county_id": self.coordinator.county_id,
-            "municipality_filter": self._municipality_filter,
+            "municipality_filter": self._municipality_filter if self._use_filter else None,
         }
 
     @property
