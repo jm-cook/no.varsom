@@ -9,6 +9,16 @@ When you set a municipality filter (e.g., "Tysnes, Bergen"), the integration aut
 
 No template sensors needed!
 
+## Visual Alert Icons
+
+The sensors automatically display warning icons from Yr.no based on the alert level:
+- 🟢 Green (level 1) - No icon (no warnings)
+- 🟡 Yellow (level 2) - Yellow warning icon
+- 🟠 Orange (level 3) - Orange warning icon  
+- 🔴 Red (level 4) - Red warning icon
+
+The icons are displayed automatically in entity cards via the `entity_picture` property. No configuration needed!
+
 ## Step 1: Configure the Integration
 
 1. Go to Settings → Devices & Services → Varsom Alerts → Configure
@@ -26,7 +36,6 @@ You'll now have two sensors automatically:
 ```yaml
 type: vertical-stack
 cards:
-  # Status overview
   - type: entities
     title: Landslide Warnings
     entities:
@@ -37,8 +46,6 @@ cards:
         entity: sensor.varsom_landslide_my_area
         attribute: active_alerts
         name: Active Alerts
-  
-  # Show details when active
   - type: conditional
     conditions:
       - entity: sensor.varsom_landslide_my_area
@@ -46,21 +53,47 @@ cards:
     card:
       type: markdown
       title: ⚠️ Active Warnings
-      content: |
-        {% set alerts = state_attr('sensor.varsom_landslide_my_area', 'alerts') %}
+      content: >
+        {% set alerts = state_attr('sensor.varsom_landslide_my_area', 'alerts')
+        %}
+
         {% for alert in alerts %}
-        ### {{ alert.level_name|upper }} Alert
-        
-        **Municipalities**: {{ alert.municipalities|join(', ') }}
-        
-        {{ alert.main_text }}
-        
+
+        ### Ongoing: {{ alert.danger_type }}
+
+        #### {{ alert.level_name|upper }} severity
+
+
+        #### Description
+
+        {{ alert.warning_text }}
+
+          
+        #### Recommendations
+
+        {{ alert.advice_text }}
+
+
+        #### Consequences
+
+        {{ alert.consequence_text }}
+
+        #### Municipalities
+
+        {{ alert.municipalities|join(', ') }}
+
+
         **Valid until**: {{ alert.valid_to[:16] }}
-        
+
+
         [📍 View Map on Varsom.no]({{ alert.url }})
-        
+
+
         ---
+
         {% endfor %}
+
+
 ```
 
 ### Compact Single Card
@@ -120,9 +153,27 @@ automation:
             importance: high
 ```
 
+## Advanced: Using Icons in Custom Cards
+
+The icons are embedded in the `entity_picture` attribute and display automatically. If you need to access the icon URL in templates:
+
+```yaml
+type: markdown
+content: |
+  {% set icon_url = state_attr('sensor.varsom_landslide_my_area', 'entity_picture') %}
+  {% if icon_url %}
+  <img src="{{ icon_url }}" width="50" height="50">
+  {% endif %}
+  
+  **Status**: {{ states('sensor.varsom_landslide_my_area') }}
+```
+
+Note: The `entity_picture` attribute contains a base64-encoded SVG data URL, so it works without any external file dependencies.
+
 ## Benefits
 
 ✅ **No template sensors needed** - Integration creates both sensors automatically  
 ✅ **Simple dashboard config** - Just use the filtered sensor directly  
 ✅ **Always up to date** - Filter changes automatically when you reconfigure  
-✅ **Clear separation** - View county-wide OR your area specifically
+✅ **Clear separation** - View county-wide OR your area specifically  
+✅ **Visual icons** - Warning level icons display automatically

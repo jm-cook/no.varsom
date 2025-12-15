@@ -31,6 +31,7 @@ from .const import (
     WARNING_TYPE_FLOOD,
     WARNING_TYPE_BOTH,
     ACTIVITY_LEVEL_NAMES,
+    ICON_DATA_URLS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -267,8 +268,9 @@ class VarsomAlertsSensor(CoordinatorEntity, SensorEntity):
         else:
             max_level = 1
         
-        # Build alerts array
-        alerts_list = []
+        # Build alerts array - deduplicate by master_id to avoid showing same warning multiple times
+        alerts_dict = {}  # Use dict with master_id as key to deduplicate
+        
         for alert in active_alerts:
             # NVE API may have multiple ID fields - try to find the correct one for Varsom.no URL
             forecast_id = alert.get("Id", "")
@@ -296,28 +298,40 @@ class VarsomAlertsSensor(CoordinatorEntity, SensorEntity):
             # Get municipality list
             municipalities = [m.get("Name", "") for m in alert.get("MunicipalityList", [])]
             
-            alert_dict = {
-                "id": forecast_id,
-                "master_id": master_id,
-                "level": int(activity_level),
-                "level_name": ACTIVITY_LEVEL_NAMES.get(activity_level, "unknown"),
-                "danger_type": alert.get("DangerTypeName", ""),
-                "warning_type": alert.get("_warning_type", "unknown"),
-                "municipalities": municipalities,
-                "valid_from": alert.get("ValidFrom", ""),
-                "valid_to": alert.get("ValidTo", ""),
-                "danger_increases": alert.get("DangerIncreaseDateTime"),
-                "danger_decreases": alert.get("DangerDecreaseDateTime"),
-                "main_text": alert.get("MainText", ""),
-                "warning_text": alert.get("WarningText", ""),
-                "advice_text": alert.get("AdviceText", ""),
-                "consequence_text": alert.get("ConsequenceText", ""),
-                "url": varsom_url,
-            }
-            alerts_list.append(alert_dict)
+            # Check if we already have an alert with this master_id
+            if url_id in alerts_dict:
+                # Merge municipality lists (avoid duplicates)
+                existing_munis = set(alerts_dict[url_id]["municipalities"])
+                existing_munis.update(municipalities)
+                alerts_dict[url_id]["municipalities"] = sorted(list(existing_munis))
+                _LOGGER.debug("Merged duplicate alert %s, municipalities now: %s", url_id, alerts_dict[url_id]["municipalities"])
+            else:
+                # New alert - add to dict
+                alert_dict = {
+                    "id": forecast_id,
+                    "master_id": master_id,
+                    "level": int(activity_level),
+                    "level_name": ACTIVITY_LEVEL_NAMES.get(activity_level, "unknown"),
+                    "danger_type": alert.get("DangerTypeName", ""),
+                    "warning_type": alert.get("_warning_type", "unknown"),
+                    "municipalities": municipalities,
+                    "valid_from": alert.get("ValidFrom", ""),
+                    "valid_to": alert.get("ValidTo", ""),
+                    "danger_increases": alert.get("DangerIncreaseDateTime"),
+                    "danger_decreases": alert.get("DangerDecreaseDateTime"),
+                    "main_text": alert.get("MainText", ""),
+                    "warning_text": alert.get("WarningText", ""),
+                    "advice_text": alert.get("AdviceText", ""),
+                    "consequence_text": alert.get("ConsequenceText", ""),
+                    "url": varsom_url,
+                }
+                alerts_dict[url_id] = alert_dict
         
-        # Sort by level (highest first)
-        alerts_list.sort(key=lambda x: x["level"], reverse=True)
+        # Convert dict back to list
+        alerts_list = list(alerts_dict.values())
+        
+        # Sort by level (highest first), then by valid_from
+        alerts_list.sort(key=lambda x: (x["level"], x.get("valid_from", "")), reverse=True)
         
         return {
             "active_alerts": len(alerts_list),
@@ -330,14 +344,25 @@ class VarsomAlertsSensor(CoordinatorEntity, SensorEntity):
         }
 
     @property
-    def icon(self):
-        """Return the icon based on the highest alert level."""
+    def entity_picture(self):
+        """Return embedded Yr.no warning icon based on warning type and level."""
         state = self.native_value
-        if state == "4":
-            return "mdi:alert-octagon"  # Red
-        elif state == "3":
-            return "mdi:alert"  # Orange
-        elif state == "2":
-            return "mdi:alert-circle"  # Yellow
-        else:
-            return "mdi:check-circle"  # Green
+        
+        # Determine warning type from coordinator data
+        warning_type = None
+        if self.coordinator.data:
+            for alert in self.coordinator.data:
+                alert_warning_type = alert.get("_warning_type", "")
+                if alert_warning_type:
+                    warning_type = alert_warning_type
+                    break
+        
+        # Map level to color
+        level_color = ACTIVITY_LEVEL_NAMES.get(state)
+        
+        if not level_color or level_color == "green" or not warning_type:
+            return None
+        
+        # Get base64 encoded SVG from const
+        icon_key = f"{warning_type}-{level_color}"
+        return ICON_DATA_URLS.get(icon_key)

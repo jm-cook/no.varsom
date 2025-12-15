@@ -19,3 +19,21 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+## Third-Party Assets
+
+### Yr Warning Icons
+
+The Yr warning icons embedded in this integration are licensed separately:
+
+**Yr warning icons © 2015 by Yr/NRK**  
+Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0)
+
+- Source: https://github.com/nrkno/yr-warning-icons
+- License: https://creativecommons.org/licenses/by/4.0/
+- Format: SVG files base64-encoded and embedded in `custom_components/varsom/const.py`
+- Modifications: Icons are used unmodified, only converted to base64 data URLs for embedding
+
+For the full CC BY 4.0 license text, see: https://creativecommons.org/licenses/by/4.0/legalcode

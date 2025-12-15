@@ -1,5 +1,29 @@
 # Frontend Display Examples for Varsom Alerts
 
+## Automatic Icon Display
+
+All Varsom alert sensors automatically display warning icons from Yr.no based on the current alert level. The icons are shown automatically in:
+- Entity cards
+- Glance cards  
+- More Info dialogs
+- Entity rows in lists
+
+The `entity_picture` property contains a base64-encoded SVG data URL, so no external files are needed.
+
+### Accessing Icons in Templates
+
+If you need the icon URL for custom cards:
+
+```yaml
+type: markdown
+content: |
+  {% set icon = state_attr('sensor.varsom_landslide_vestland', 'entity_picture') %}
+  {% if icon %}
+  <img src="{{ icon }}" width="64" height="64" alt="Warning icon">
+  {% endif %}
+  Current level: {{ states('sensor.varsom_landslide_vestland') }}
+```
+
 ## Basic Entity Card
 
 Shows the alert level and count:

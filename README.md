@@ -13,6 +13,7 @@ A Home Assistant custom integration that provides landslide and flood warnings f
 - **Rich alert data** - Includes warning text, advice, consequences, municipalities, and more
 - **Direct links** - Each alert includes a link to Varsom.no with an interactive map
 - **Bilingual** - Support for Norwegian and English
+- **Official Yr.no icons** - Uses the same warning icons as Yr.no and Varsom.no
 
 ## Installation
 
@@ -188,6 +189,7 @@ Based on the Met Alerts integration pattern with improvements:
 - **Author**: Jeremy Cook (@jm-cook)
 - **Data Source**: NVE (Norwegian Water Resources and Energy Directorate)
 - **Website**: https://www.varsom.no/
+- **Warning Icons**: Yr warning icons © 2015 by Yr/NRK, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
 ## License
 
