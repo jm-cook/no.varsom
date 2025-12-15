@@ -1,0 +1,61 @@
+{
+  "LandSlideTypeList": [],
+  "EventId": "148480",
+  "Id": "584744",
+  "MasterId": "584732",
+  "Version": 3,
+  "LangKey": 1,
+  "CapStatus": "actual",
+  "MetId": null,
+  "MetName": null,
+  "CountyList": [
+    {
+      "Id": "46",
+      "Name": "Vestland",
+      "MunicipalityList": [],
+      "HighestActivityLevel": null
+    }
+  ],
+  "MunicipalityList": [
+    {
+      "Id": "4601",
+      "Name": "Bergen",
+      "WarningList": []
+    }
+  ],
+  "MunicipalityCsvString": "4601;4627;1133;1130;4638;4617;4615;4624;4616;1135;4611;1160;4620;4634;4628;1145;1106;4623;4631;4621;1134;4614;4629;1103;4635;4613;4630;4619;1146;4612;4622;4618;1149;",
+  "MunicipalityCsvStringBefore2024": null,
+  "MunicipalityCsvStringBefore2020": null,
+  "ActivityLevel": "2",
+  "ActivityLevelName": null,
+  "DangerType": "5",
+  "DangerTypeName": "Jord- og flomskredfare",
+  "ValidFrom": "2025-12-15T07:00:00",
+  "ValidTo": "2025-12-16T06:59:00",
+  "NextWarningTime": "2025-12-15T15:30:00",
+  "PublishTime": "2025-12-15T09:55:52.836824",
+  "FirstPublishTime": "2025-12-13T10:54:31.4879508",
+  "CreatedTime": "2025-12-15T09:50:41.6285611",
+  "DangerIncreaseDateTime": "2025-12-14T16:00:00",
+  "DangerDecreaseDateTime": "2025-12-16T12:00:00",
+  "MainText": "Varsel om jord- og flomskredfare, gult nivå for deler av Vestland og Rogaland ",
+  "WarningText": "Det ventes opp mot 50-60 mm nedbør fra mandag morgen til tirsdag ettermiddag. Nedbøren vil komme som regn under ca. 1500 moh. Bratte skråninger, samt bekker og elveløp med stor vannføring er spesielt utsatt. Flomskred har lang rekkevidde og kan gå ned til dalbunnen selv om det løses ut høyt i terrenget.",
+  "AdviceText": "Hold deg oppdatert om utviklingen av været, skred- og flomsituasjonen, og følg med på værradaren. Hold deg unna bratte skråninger, samt bekker og elveløp med stor vannføring. Hold stikkrenner, kummer og andre vannveier fri for snø/is, grus, søppel, kvist og løv. Tette vannveier med oppdemmet vann kan forårsake skred.",
+  "ConsequenceText": "Skredhendelser kan forekomme. Utsatte bane- og vegstrekninger kan bli stengt.",
+  "LevelMeaningText": null,
+  "CauseText": null,
+  "Area": null,
+  "ExposedHeightType": 0,
+  "ExposedHeightValue": 0,
+  "ExposedHeightValue2": 1500,
+  "ExposedClimateType": 0,
+  "CauseList": [
+    {
+      "Id": 1,
+      "Name": "Regn"
+    }
+  ],
+  "MicroBlogPostList": [],
+  "StationList": [],
+  "ImageUrlList": []
+}

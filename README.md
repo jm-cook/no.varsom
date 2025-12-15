@@ -149,6 +149,16 @@ This integration uses the official NVE API:
 - **Update Interval**: 30 minutes
 - **Documentation**: https://api.nve.no/doc/
 
+### Language Support
+
+The language option you select during setup controls both:
+- ✅ The alert text language (Norwegian or English from the API via Språknøkkel parameter)
+- ✅ The language of the Varsom.no website links (Norwegian or English interface)
+
+The API uses the Språknøkkel path parameter:
+- `1` = Norwegian (LangKey: 1 in response)
+- `2` = English (LangKey: 2 in response)
+
 ## Supported Counties
 
 - Oslo (03)

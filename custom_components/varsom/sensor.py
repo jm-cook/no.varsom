@@ -90,7 +90,10 @@ class VarsomAlertsCoordinator(DataUpdateCoordinator):
 
     async def _fetch_warnings(self, base_url: str, danger_type_label: str):
         """Fetch warnings from a specific API endpoint."""
-        url = f"{base_url}/Warning/County/{self.county_id}/{self.lang}"
+        # NVE API uses Språknøkkel (language key) as path parameter:
+        # 1 = Norwegian (LangKey: 1), 2 = English (LangKey: 2)
+        lang_key = "2" if self.lang == "en" else "1"
+        url = f"{base_url}/Warning/County/{self.county_id}/{lang_key}"
         headers = {
             "Accept": "application/json",
             "User-Agent": "varsom/1.0.0 jeremy.m.cook@gmail.com"
@@ -284,9 +287,11 @@ class VarsomAlertsSensor(CoordinatorEntity, SensorEntity):
             
             activity_level = alert.get("ActivityLevel", "1")
             
-            # Construct varsom.no URL
-            lang_path = "en" if self.coordinator.lang == "en" else ""
-            varsom_url = f"https://www.varsom.no/{lang_path}/flood-and-landslide-warning-service/forecastid/{url_id}".replace("//f", "/f") if url_id else None
+            # Construct varsom.no URL - path differs by language
+            if self.coordinator.lang == "en":
+                varsom_url = f"https://www.varsom.no/en/flood-and-landslide-warning-service/forecastid/{url_id}" if url_id else None
+            else:
+                varsom_url = f"https://www.varsom.no/flom-og-jordskred/varsling/varselid/{url_id}" if url_id else None
             
             # Get municipality list
             municipalities = [m.get("Name", "") for m in alert.get("MunicipalityList", [])]
