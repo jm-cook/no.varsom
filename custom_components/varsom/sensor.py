@@ -134,54 +134,82 @@ class VarsomAlertsCoordinator(DataUpdateCoordinator):
             return []
 
     async def _fetch_avalanche_warnings(self, danger_type_label: str):
-        """Fetch avalanche warnings using the RegionSummary API."""
+        """Fetch avalanche warnings using the RegionSummary API and detailed endpoints."""
         try:
-            # Use the RegionSummary/Simple endpoint which returns all regions
-            # Format: YYYY-MM-DD
+            # First, get all regions with active warnings using RegionSummary
             today = dt.datetime.now().strftime("%Y-%m-%d")
             tomorrow = (dt.datetime.now() + dt.timedelta(days=1)).strftime("%Y-%m-%d")
             
             # Language key: 2 = Norwegian, 1 = English  
-            url = f"{API_BASE_AVALANCHE}/api/RegionSummary/Simple/2/{today}/{tomorrow}"
+            summary_url = f"{API_BASE_AVALANCHE}/api/RegionSummary/Simple/2/{today}/{tomorrow}"
             
             async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
+                # Get region summary to find active regions
+                async with session.get(summary_url) as response:
                     if response.status != 200:
-                        _LOGGER.error("Error fetching %s warnings: HTTP %d", danger_type_label, response.status)
+                        _LOGGER.error("Error fetching %s warnings summary: HTTP %d", danger_type_label, response.status)
                         return []
                     
-                    json_data = await response.json()
-                    if not json_data:
+                    summary_data = await response.json()
+                    if not summary_data:
                         _LOGGER.info("No %s warnings found", danger_type_label)
                         return []
                     
-                    # Convert region-based data to warning format compatible with landslide/flood
-                    warnings = []
-                    for region in json_data:
+                    # Find regions with active warnings (danger level > 0)
+                    active_regions = []
+                    for region in summary_data:
                         if "AvalancheWarningList" in region and region["AvalancheWarningList"]:
                             for warning in region["AvalancheWarningList"]:
-                                # Only include warnings with danger level > 0 (0 = No Rating)
                                 danger_level = warning.get("DangerLevel", 0)
                                 if isinstance(danger_level, str):
                                     danger_level = int(danger_level) if danger_level.isdigit() else 0
                                 if danger_level > 0:
-                                    # Convert to format similar to landslide/flood warnings
-                                    converted_warning = {
-                                        "Id": warning.get("RegionId"),
-                                        "ActivityLevel": str(warning.get("DangerLevel", 1)),
-                                        "DangerLevel": f"Level {warning.get('DangerLevel', 1)}",
-                                        "DangerTypeName": "Skredfare",  # Norwegian for "Avalanche danger"
-                                        "MainText": warning.get("MainText", "Snøskredvarsel"),
-                                        "RegionName": warning.get("RegionName", "Ukjent område"),
-                                        "ValidFrom": warning.get("ValidFrom"),
-                                        "ValidTo": warning.get("ValidTo"),
-                                        "PublishTime": warning.get("PublishTime"),
-                                        "_region_id": warning.get("RegionId"),
-                                        "_region_name": warning.get("RegionName"),
-                                    }
-                                    warnings.append(converted_warning)
+                                    active_regions.append(warning.get("RegionId"))
+                                    break  # Found active warning for this region, no need to check others
                     
-                    _LOGGER.info("Successfully fetched %s warnings (count: %d)", danger_type_label, len(warnings))
+                    _LOGGER.debug("Found %d active avalanche regions", len(active_regions))
+                    
+                    # Now get detailed data for active regions to get county/municipality info
+                    warnings = []
+                    for region_id in active_regions:
+                        detail_url = f"{API_BASE_AVALANCHE}/api/AvalancheWarningByRegion/Detail/{region_id}/2/{today}/{tomorrow}"
+                        
+                        try:
+                            async with session.get(detail_url) as detail_response:
+                                if detail_response.status == 200:
+                                    detail_data = await detail_response.json()
+                                    
+                                    # The detail API returns a list of warnings for the region
+                                    if isinstance(detail_data, list):
+                                        for warning in detail_data:
+                                            danger_level = warning.get("DangerLevel", 0)
+                                            if isinstance(danger_level, str):
+                                                danger_level = int(danger_level) if danger_level.isdigit() else 0
+                                            if danger_level > 0:
+                                                # Convert to format similar to landslide/flood warnings
+                                                converted_warning = {
+                                                    "Id": warning.get("RegionId"),
+                                                    "ActivityLevel": str(warning.get("DangerLevel", 1)),
+                                                    "DangerLevel": f"Level {warning.get('DangerLevel', 1)}",
+                                                    "DangerTypeName": "Skredfare",  # Norwegian for "Avalanche danger"
+                                                    "MainText": warning.get("MainText", "Snøskredvarsel"),
+                                                    "RegionName": warning.get("RegionName", "Ukjent område"),
+                                                    "ValidFrom": warning.get("ValidFrom"),
+                                                    "ValidTo": warning.get("ValidTo"),
+                                                    "PublishTime": warning.get("PublishTime"),
+                                                    "CountyList": warning.get("CountyList", []),
+                                                    "MunicipalityList": warning.get("MunicipalityList", []),
+                                                    "_region_id": warning.get("RegionId"),
+                                                    "_region_name": warning.get("RegionName"),
+                                                }
+                                                warnings.append(converted_warning)
+                                else:
+                                    _LOGGER.debug("Could not fetch details for region %s: HTTP %d", region_id, detail_response.status)
+                        except Exception as e:
+                            _LOGGER.debug("Error fetching details for region %s: %s", region_id, e)
+                            continue
+                    
+                    _LOGGER.info("Successfully fetched detailed %s warnings (count: %d)", danger_type_label, len(warnings))
                     return warnings
                         
         except aiohttp.ClientError as err:
@@ -243,14 +271,25 @@ class VarsomAlertsCoordinator(DataUpdateCoordinator):
                     warning["_warning_type"] = "flood"
                 all_warnings.extend(flood_warnings)
             
-            # Fetch avalanche warnings (Note: uses region-based API, may need different endpoint)
+            # Fetch avalanche warnings (region-based API, filtered by county)
             if self.warning_type in [WARNING_TYPE_AVALANCHE, WARNING_TYPE_ALL]:
-                # For now, use landslide API structure as placeholder
-                # TODO: Implement proper avalanche API endpoint when available
                 avalanche_warnings = await self._fetch_avalanche_warnings("avalanche")
+                # Filter avalanche warnings by county
+                county_filtered_avalanche = []
                 for warning in avalanche_warnings:
                     warning["_warning_type"] = "avalanche"
-                all_warnings.extend(avalanche_warnings)
+                    # Check if this avalanche warning affects the selected county
+                    county_list = warning.get("CountyList", [])
+                    for county in county_list:
+                        county_id = county.get("Id")
+                        # Handle both string and int county IDs
+                        if str(county_id) == str(self.county_id):
+                            county_filtered_avalanche.append(warning)
+                            break
+                
+                _LOGGER.info("Filtered avalanche warnings for county %s: %d out of %d", 
+                           self.county_name, len(county_filtered_avalanche), len(avalanche_warnings))
+                all_warnings.extend(county_filtered_avalanche)
             
             _LOGGER.info("Total warnings fetched: %d", len(all_warnings))
             return all_warnings
