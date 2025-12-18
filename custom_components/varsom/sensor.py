@@ -1,5 +1,6 @@
 """Varsom Alerts sensor platform."""
 import asyncio
+import datetime as dt
 import logging
 from datetime import timedelta
 
@@ -28,9 +29,12 @@ from .const import (
     CONF_TEST_MODE,
     API_BASE_LANDSLIDE,
     API_BASE_FLOOD,
+    API_BASE_AVALANCHE,
     WARNING_TYPE_LANDSLIDE,
     WARNING_TYPE_FLOOD,
+    WARNING_TYPE_AVALANCHE,
     WARNING_TYPE_BOTH,
+    WARNING_TYPE_ALL,
     ACTIVITY_LEVEL_NAMES,
     ICON_DATA_URLS,
 )
@@ -129,6 +133,64 @@ class VarsomAlertsCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Unexpected error fetching %s warnings: %s", danger_type_label, err)
             return []
 
+    async def _fetch_avalanche_warnings(self, danger_type_label: str):
+        """Fetch avalanche warnings using the RegionSummary API."""
+        try:
+            # Use the RegionSummary/Simple endpoint which returns all regions
+            # Format: YYYY-MM-DD
+            today = dt.datetime.now().strftime("%Y-%m-%d")
+            tomorrow = (dt.datetime.now() + dt.timedelta(days=1)).strftime("%Y-%m-%d")
+            
+            # Language key: 2 = Norwegian, 1 = English  
+            url = f"{API_BASE_AVALANCHE}/api/RegionSummary/Simple/2/{today}/{tomorrow}"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        _LOGGER.error("Error fetching %s warnings: HTTP %d", danger_type_label, response.status)
+                        return []
+                    
+                    json_data = await response.json()
+                    if not json_data:
+                        _LOGGER.info("No %s warnings found", danger_type_label)
+                        return []
+                    
+                    # Convert region-based data to warning format compatible with landslide/flood
+                    warnings = []
+                    for region in json_data:
+                        if "AvalancheWarningList" in region and region["AvalancheWarningList"]:
+                            for warning in region["AvalancheWarningList"]:
+                                # Only include warnings with danger level > 0 (0 = No Rating)
+                                danger_level = warning.get("DangerLevel", 0)
+                                if isinstance(danger_level, str):
+                                    danger_level = int(danger_level) if danger_level.isdigit() else 0
+                                if danger_level > 0:
+                                    # Convert to format similar to landslide/flood warnings
+                                    converted_warning = {
+                                        "Id": warning.get("RegionId"),
+                                        "ActivityLevel": str(warning.get("DangerLevel", 1)),
+                                        "DangerLevel": f"Level {warning.get('DangerLevel', 1)}",
+                                        "DangerTypeName": "Skredfare",  # Norwegian for "Avalanche danger"
+                                        "MainText": warning.get("MainText", "Snøskredvarsel"),
+                                        "RegionName": warning.get("RegionName", "Ukjent område"),
+                                        "ValidFrom": warning.get("ValidFrom"),
+                                        "ValidTo": warning.get("ValidTo"),
+                                        "PublishTime": warning.get("PublishTime"),
+                                        "_region_id": warning.get("RegionId"),
+                                        "_region_name": warning.get("RegionName"),
+                                    }
+                                    warnings.append(converted_warning)
+                    
+                    _LOGGER.info("Successfully fetched %s warnings (count: %d)", danger_type_label, len(warnings))
+                    return warnings
+                        
+        except aiohttp.ClientError as err:
+            _LOGGER.error("Error fetching %s warnings: %s", danger_type_label, err)
+            return []
+        except Exception as err:
+            _LOGGER.error("Unexpected error fetching %s warnings: %s", danger_type_label, err)
+            return []
+
     async def _async_update_data(self):
         """Fetch data from API."""
         all_warnings = []
@@ -168,18 +230,27 @@ class VarsomAlertsCoordinator(DataUpdateCoordinator):
                 _LOGGER.info("Test mode: Injected fake orange landslide alert for Testville")
             
             # Fetch landslide warnings
-            if self.warning_type in [WARNING_TYPE_LANDSLIDE, WARNING_TYPE_BOTH]:
+            if self.warning_type in [WARNING_TYPE_LANDSLIDE, WARNING_TYPE_BOTH, WARNING_TYPE_ALL]:
                 landslide_warnings = await self._fetch_warnings(API_BASE_LANDSLIDE, "landslide")
                 for warning in landslide_warnings:
                     warning["_warning_type"] = "landslide"
                 all_warnings.extend(landslide_warnings)
             
             # Fetch flood warnings
-            if self.warning_type in [WARNING_TYPE_FLOOD, WARNING_TYPE_BOTH]:
+            if self.warning_type in [WARNING_TYPE_FLOOD, WARNING_TYPE_BOTH, WARNING_TYPE_ALL]:
                 flood_warnings = await self._fetch_warnings(API_BASE_FLOOD, "flood")
                 for warning in flood_warnings:
                     warning["_warning_type"] = "flood"
                 all_warnings.extend(flood_warnings)
+            
+            # Fetch avalanche warnings (Note: uses region-based API, may need different endpoint)
+            if self.warning_type in [WARNING_TYPE_AVALANCHE, WARNING_TYPE_ALL]:
+                # For now, use landslide API structure as placeholder
+                # TODO: Implement proper avalanche API endpoint when available
+                avalanche_warnings = await self._fetch_avalanche_warnings("avalanche")
+                for warning in avalanche_warnings:
+                    warning["_warning_type"] = "avalanche"
+                all_warnings.extend(avalanche_warnings)
             
             _LOGGER.info("Total warnings fetched: %d", len(all_warnings))
             return all_warnings

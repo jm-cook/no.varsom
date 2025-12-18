@@ -22,10 +22,13 @@ from .const import (
     CONF_MUNICIPALITY_FILTER,
     CONF_TEST_MODE,
     API_BASE_LANDSLIDE,
+    API_BASE_AVALANCHE,
     COUNTIES,
     WARNING_TYPE_LANDSLIDE,
     WARNING_TYPE_FLOOD,
+    WARNING_TYPE_AVALANCHE,
     WARNING_TYPE_BOTH,
+    WARNING_TYPE_ALL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,7 +36,9 @@ _LOGGER = logging.getLogger(__name__)
 
 async def validate_api_connection(hass: HomeAssistant, county_id: str, warning_type: str, lang: str):
     """Validate that the API connection works."""
-    # Test with landslide API (always available)
+    # Test with landslide API for county-based warnings (always available)
+    # Note: Avalanche API uses different structure (regions instead of counties)
+    # but we still validate against landslide API for basic connectivity
     url = f"{API_BASE_LANDSLIDE}/Warning/County/{county_id}/{lang}"
     headers = {
         "Accept": "application/json",
@@ -113,7 +118,9 @@ class VarsomConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_WARNING_TYPE, default=DEFAULT_WARNING_TYPE): vol.In({
                     WARNING_TYPE_LANDSLIDE: "Landslide",
                     WARNING_TYPE_FLOOD: "Flood",
-                    WARNING_TYPE_BOTH: "Both",
+                    WARNING_TYPE_AVALANCHE: "Avalanche",
+                    WARNING_TYPE_BOTH: "Landslide & Flood",
+                    WARNING_TYPE_ALL: "All (Landslide, Flood & Avalanche)",
                 }),
                 vol.Optional(CONF_LANG, default=DEFAULT_LANG): vol.In(["no", "en"]),
                 vol.Optional(CONF_MUNICIPALITY_FILTER, default=""): cv.string,
@@ -188,7 +195,9 @@ class VarsomOptionsFlow(config_entries.OptionsFlow):
                 vol.Required(CONF_WARNING_TYPE, default=current_warning_type): vol.In({
                     WARNING_TYPE_LANDSLIDE: "Landslide",
                     WARNING_TYPE_FLOOD: "Flood",
-                    WARNING_TYPE_BOTH: "Both",
+                    WARNING_TYPE_BOTH: "Landslide & Flood",
+                    WARNING_TYPE_AVALANCHE: "Avalanche",
+                    WARNING_TYPE_ALL: "All (Landslide, Flood & Avalanche)",
                 }),
                 vol.Optional(CONF_LANG, default=current_lang): vol.In(["no", "en"]),
                 vol.Optional(CONF_MUNICIPALITY_FILTER, default=current_municipality_filter): cv.string,
