@@ -37,19 +37,10 @@ class BaseWarningAPI(ABC):
         pass
 
 
-class LandslideAPI(BaseWarningAPI):
-    """API client for landslide warnings."""
+class CountyBasedAPI(BaseWarningAPI):
+    """Base class for county-based APIs (landslide/flood)."""
     
-    def _get_warning_type(self) -> str:
-        return "landslide"
-    
-    async def fetch_warnings(self) -> List[Dict[str, Any]]:
-        """Fetch landslide warnings from NVE API."""
-        return await self._fetch_county_based_warnings(
-            API_BASE_LANDSLIDE, "landslide"
-        )
-    
-    async def _fetch_county_based_warnings(self, base_url: str, warning_type: str) -> List[Dict[str, Any]]:
+    async def _fetch_county_warnings(self, base_url: str, warning_type: str) -> List[Dict[str, Any]]:
         """Fetch warnings using county-based API."""
         lang_key = "2" if self.lang == "en" else "1"
         url = f"{base_url}/Warning/County/{self.county_id}/{lang_key}"
@@ -75,6 +66,9 @@ class LandslideAPI(BaseWarningAPI):
                             if json_data:
                                 _LOGGER.info("Successfully fetched %s warnings (count: %d)", warning_type, len(json_data))
                                 return json_data
+                            else:
+                                _LOGGER.info("No %s warnings found", warning_type)
+                                return []
                         else:
                             _LOGGER.error("Unexpected content type for %s: %s", warning_type, content_type)
                             return []
@@ -87,7 +81,18 @@ class LandslideAPI(BaseWarningAPI):
             return []
 
 
-class FloodAPI(LandslideAPI):
+class LandslideAPI(CountyBasedAPI):
+    """API client for landslide warnings."""
+    
+    def _get_warning_type(self) -> str:
+        return "landslide"
+    
+    async def fetch_warnings(self) -> List[Dict[str, Any]]:
+        """Fetch landslide warnings from NVE API."""
+        return await self._fetch_county_warnings(API_BASE_LANDSLIDE, "landslide")
+
+
+class FloodAPI(CountyBasedAPI):
     """API client for flood warnings."""
     
     def _get_warning_type(self) -> str:
@@ -95,9 +100,7 @@ class FloodAPI(LandslideAPI):
     
     async def fetch_warnings(self) -> List[Dict[str, Any]]:
         """Fetch flood warnings from NVE API."""
-        return await self._fetch_county_based_warnings(
-            API_BASE_FLOOD, "flood"
-        )
+        return await self._fetch_county_warnings(API_BASE_FLOOD, "flood")
 
 
 class AvalancheAPI(BaseWarningAPI):
@@ -166,6 +169,8 @@ class AvalancheAPI(BaseWarningAPI):
                                                     county_id = county.get("Id")
                                                     if str(county_id) == str(self.county_id):
                                                         county_matches = True
+                                                        _LOGGER.debug("Including avalanche warning for %s (county match: %s)", 
+                                                                    warning.get("RegionName"), county.get("Name"))
                                                         break
                                                 
                                                 if county_matches:
@@ -183,6 +188,9 @@ class AvalancheAPI(BaseWarningAPI):
                                                         "MunicipalityList": warning.get("MunicipalityList", []),
                                                         "_region_id": warning.get("RegionId"),
                                                         "_region_name": warning.get("RegionName"),
+                                                        "UtmZone": warning.get("UtmZone"),
+                                                        "UtmEast": warning.get("UtmEast"),
+                                                        "UtmNorth": warning.get("UtmNorth"),
                                                     }
                                                     warnings.append(converted_warning)
                         except Exception as e:
@@ -203,9 +211,25 @@ class AvalancheAPI(BaseWarningAPI):
 class WarningAPIFactory:
     """Factory for creating warning API clients."""
     
+    def __init__(self, county_id: str, county_name: str, lang: str = "en"):
+        self.county_id = county_id
+        self.county_name = county_name
+        self.lang = lang
+    
+    def get_api(self, warning_type: str) -> BaseWarningAPI:
+        """Create appropriate API client for warning type."""
+        if warning_type == "landslide":
+            return LandslideAPI(self.county_id, self.county_name, self.lang)
+        elif warning_type == "flood":
+            return FloodAPI(self.county_id, self.county_name, self.lang)
+        elif warning_type == "avalanche":
+            return AvalancheAPI(self.county_id, self.county_name, self.lang)
+        else:
+            raise ValueError(f"Unknown warning type: {warning_type}")
+    
     @staticmethod
     def create_api(warning_type: str, county_id: str, county_name: str, lang: str = "en") -> BaseWarningAPI:
-        """Create appropriate API client for warning type."""
+        """Create appropriate API client for warning type (static method)."""
         if warning_type == "landslide":
             return LandslideAPI(county_id, county_name, lang)
         elif warning_type == "flood":
