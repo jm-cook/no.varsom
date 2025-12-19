@@ -102,23 +102,55 @@ class VarsomAlertsCoordinator(DataUpdateCoordinator):
         try:
             # Inject test alert if test mode is enabled
             if self.test_mode:
+                # Determine primary warning type for test alert
+                test_warning_type = "landslide"  # default
+                if self.warning_type == WARNING_TYPE_FLOOD:
+                    test_warning_type = "flood"
+                elif self.warning_type == WARNING_TYPE_AVALANCHE:
+                    test_warning_type = "avalanche"
+                elif self.warning_type in [WARNING_TYPE_BOTH, WARNING_TYPE_ALL]:
+                    test_warning_type = "landslide"  # use landslide for combined types
+                
+                # Create warning type specific content
+                if test_warning_type == "flood":
+                    danger_type_name = "Flom"
+                    main_text = "Test Alert - Orange Flood Warning for Testville"
+                    warning_text = "Det er moderat fare for flom i Testville kommune. Nedbør og snøsmelting kan føre til oversvømmelse."
+                    advice_text = "Unngå opphold i flomfarlige områder. Vær særlig oppmerksom ved ferdsel nær bekker og elver."
+                    consequence_text = "Flom kan medføre skade på bygninger og infrastruktur. Veier kan bli stengt på grunn av flom."
+                    emergency_text = "Test emergency warning text for Testville flood alert"
+                elif test_warning_type == "avalanche":
+                    danger_type_name = "Skredfare" 
+                    main_text = "Test Alert - Orange Avalanche Warning for Testville"
+                    warning_text = "Det er moderat fare for snøskred i Testville kommune. Værforhold kan utløse skred i bratte områder."
+                    advice_text = "Unngå skredfarlige områder. Vær særlig forsiktig i bratt terreng over tregrensen."
+                    consequence_text = "Snøskred kan medføre alvorlig fare for liv og helse. Transportruter kan bli stengt."
+                    emergency_text = "Test emergency warning text for Testville avalanche alert"
+                else:  # landslide
+                    danger_type_name = "Jordskred"
+                    main_text = "Test Alert - Orange Landslide Warning for Testville"
+                    warning_text = "Det er moderat fare for jordskred i Testville kommune. Væte og temperaturendringer kan utløse skred i bratte skråninger."
+                    advice_text = "Unngå opphold under bratte fjellsider og i skredfarlige områder. Vær særlig oppmerksom ved ferdsel i terrenget."
+                    consequence_text = "Jordskred kan medføre skade på infrastruktur og fare for liv og helse. Mindre veier kan bli stengt."
+                    emergency_text = "Test emergency warning text for Testville landslide alert"
+                
                 test_alert = {
                     "Id": 999999,
                     "ActivityLevel": "3",  # Orange
                     "DangerLevel": "Moderate", 
-                    "DangerTypeName": "Jordskred",
-                    "MainText": "Test Alert - Orange Landslide Warning for Testville", 
-                    "WarningText": "Det er moderat fare for jordskred i Testville kommune. Væte og temperaturendringer kan utløse skred i bratte skråninger.",
-                    "AdviceText": "Unngå opphold under bratte fjellsider og i skredfarlige områder. Vær særlig oppmerksom ved ferdsel i terrenget.",
-                    "ConsequenceText": "Jordskred kan medføre skade på infrastruktur og fare for liv og helse. Mindre veier kan bli stengt.",
-                    "EmergencyWarning": "Test emergency warning text for Testville landslide alert",
+                    "DangerTypeName": danger_type_name,
+                    "MainText": main_text, 
+                    "WarningText": warning_text,
+                    "AdviceText": advice_text,
+                    "ConsequenceText": consequence_text,
+                    "EmergencyWarning": emergency_text,
                     "LangKey": 2,
-                    "ValidFrom": "2025-12-16T00:00:00",
-                    "ValidTo": "2025-12-17T23:59:59", 
-                    "NextWarningTime": "2025-12-17T08:00:00",
-                    "PublishTime": "2025-12-16T08:00:00",
-                    "DangerIncreaseDateTime": "2025-12-16T12:00:00",
-                    "DangerDecreaseDateTime": "2025-12-17T06:00:00",
+                    "ValidFrom": "2025-12-19T00:00:00",
+                    "ValidTo": "2025-12-20T23:59:59", 
+                    "NextWarningTime": "2025-12-20T08:00:00",
+                    "PublishTime": "2025-12-19T08:00:00",
+                    "DangerIncreaseDateTime": "2025-12-19T12:00:00",
+                    "DangerDecreaseDateTime": "2025-12-20T06:00:00",
                     "Author": "Test System",
                     "MunicipalityList": [
                         {
@@ -128,10 +160,10 @@ class VarsomAlertsCoordinator(DataUpdateCoordinator):
                             "CountyName": "Vestland"
                         }
                     ],
-                    "_warning_type": "landslide"
+                    "_warning_type": test_warning_type
                 }
                 all_warnings.append(test_alert)
-                _LOGGER.info("Test mode: Injected fake orange landslide alert for Testville")
+                _LOGGER.info("Test mode: Injected fake orange %s alert for Testville", test_warning_type)
             
             # Use API factory to get appropriate API clients and fetch warnings
             api_factory = WarningAPIFactory(self.county_id, self.county_name, self.lang)
@@ -331,6 +363,11 @@ class VarsomAlertsSensor(CoordinatorEntity, SensorEntity):
                 alerts_dict[url_id]["municipalities"] = sorted(list(existing_munis))
                 _LOGGER.debug("Merged duplicate alert %s, municipalities now: %s", url_id, alerts_dict[url_id]["municipalities"])
             else:
+                # Generate individual icon for this alert
+                level_color = ACTIVITY_LEVEL_NAMES.get(activity_level, "green")
+                icon_key = f"{warning_type}-{level_color}" if warning_type and level_color != "green" else None
+                individual_icon = ICON_DATA_URLS.get(icon_key) if icon_key else None
+                
                 # New alert - add to dict
                 alert_dict = {
                     "id": forecast_id,
@@ -345,20 +382,40 @@ class VarsomAlertsSensor(CoordinatorEntity, SensorEntity):
                     "danger_increases": alert.get("DangerIncreaseDateTime"),
                     "danger_decreases": alert.get("DangerDecreaseDateTime"),
                     "main_text": alert.get("MainText", ""),
-                    "warning_text": alert.get("WarningText", ""),
-                    "advice_text": alert.get("AdviceText", ""),
-                    "consequence_text": alert.get("ConsequenceText", ""),
                     "url": varsom_url,
+                    "entity_picture": individual_icon,  # Individual icon for each alert
                 }
                 
-                # Add geographical data for avalanche warnings
+                # Add avalanche-specific attributes instead of generic warning/advice/consequence text
                 if warning_type == "avalanche":
                     alert_dict.update({
+                        # Geographical data
                         "region_id": alert.get("_region_id", alert.get("RegionId")),
                         "region_name": alert.get("_region_name", alert.get("RegionName")),
                         "utm_zone": alert.get("UtmZone"),
                         "utm_east": alert.get("UtmEast"),
                         "utm_north": alert.get("UtmNorth"),
+                        
+                        # Avalanche-specific information (instead of warning_text/advice_text/consequence_text)
+                        "avalanche_danger": alert.get("AvalancheDanger", ""),
+                        "emergency_warning": alert.get("EmergencyWarning", ""),
+                        "avalanche_problems": alert.get("AvalancheProblems", []),
+                        "avalanche_advices": alert.get("AvalancheAdvices", []),
+                        "snow_surface": alert.get("SnowSurface", ""),
+                        "current_weaklayers": alert.get("CurrentWeaklayers", ""),
+                        "latest_avalanche_activity": alert.get("LatestAvalancheActivity", ""),
+                        "latest_observations": alert.get("LatestObservations", ""),
+                        "mountain_weather": alert.get("MountainWeather", {}),
+                        "forecaster": alert.get("Author", ""),
+                        "danger_level_name": alert.get("DangerLevelName", ""),
+                        "exposed_height": alert.get("ExposedHeight1", alert.get("ExposedHeightFill", 0)),
+                    })
+                else:
+                    # Use generic attributes for landslide and flood warnings
+                    alert_dict.update({
+                        "warning_text": alert.get("WarningText", ""),
+                        "advice_text": alert.get("AdviceText", ""),
+                        "consequence_text": alert.get("ConsequenceText", ""),
                     })
                 alerts_dict[url_id] = alert_dict
         

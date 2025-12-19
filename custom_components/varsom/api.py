@@ -170,18 +170,29 @@ class AvalancheAPI(BaseWarningAPI):
                                             if isinstance(danger_level, str):
                                                 danger_level = int(danger_level) if danger_level.isdigit() else 0
                                             if danger_level > 0:
-                                                # Filter by county
+                                                # Calculate county relevance score
+                                                municipality_list = warning.get("MunicipalityList", [])
                                                 county_list = warning.get("CountyList", [])
-                                                county_matches = False
-                                                for county in county_list:
-                                                    county_id = county.get("Id")
-                                                    if str(county_id) == str(self.county_id):
-                                                        county_matches = True
-                                                        _LOGGER.debug("Including avalanche warning for %s (county match: %s)", 
-                                                                    warning.get("RegionName"), county.get("Name"))
-                                                        break
                                                 
-                                                if county_matches:
+                                                # Count municipalities in target county vs total municipalities
+                                                target_county_municipalities = 0
+                                                total_municipalities = len(municipality_list)
+                                                
+                                                for municipality in municipality_list:
+                                                    muni_county_id = municipality.get("CountyId")
+                                                    if str(muni_county_id) == str(self.county_id):
+                                                        target_county_municipalities += 1
+                                                
+                                                # Calculate relevance score (0.0 to 1.0)
+                                                relevance_score = target_county_municipalities / total_municipalities if total_municipalities > 0 else 0
+                                                
+                                                # Only include regions with significant relevance (>= 30% of municipalities)
+                                                # This filters out regions that barely touch the county
+                                                if relevance_score >= 0.3:
+                                                    region_name = warning.get("RegionName", "Unknown")
+                                                    _LOGGER.debug("Including avalanche region '%s': %d/%d municipalities in %s (%.1f%% relevance)", 
+                                                                region_name, target_county_municipalities, total_municipalities, 
+                                                                self.county_name, relevance_score * 100)
                                                     converted_warning = {
                                                         "Id": warning.get("RegionId"),
                                                         "ActivityLevel": str(warning.get("DangerLevel", 1)),
@@ -200,6 +211,21 @@ class AvalancheAPI(BaseWarningAPI):
                                                         "UtmZone": warning.get("UtmZone"),
                                                         "UtmEast": warning.get("UtmEast"),
                                                         "UtmNorth": warning.get("UtmNorth"),
+                                                        
+                                                        # Avalanche-specific attributes (instead of generic WarningText/AdviceText/ConsequenceText)
+                                                        "AvalancheDanger": warning.get("AvalancheDanger", ""),
+                                                        "EmergencyWarning": warning.get("EmergencyWarning", ""),
+                                                        "AvalancheProblems": warning.get("AvalancheProblems", []),
+                                                        "AvalancheAdvices": warning.get("AvalancheAdvices", []),
+                                                        "SnowSurface": warning.get("SnowSurface", ""),
+                                                        "CurrentWeaklayers": warning.get("CurrentWeaklayers", ""),
+                                                        "LatestAvalancheActivity": warning.get("LatestAvalancheActivity", ""),
+                                                        "LatestObservations": warning.get("LatestObservations", ""),
+                                                        "MountainWeather": warning.get("MountainWeather", {}),
+                                                        "Author": warning.get("Author", ""),
+                                                        "DangerLevelName": warning.get("DangerLevelName", ""),
+                                                        "ExposedHeightFill": warning.get("ExposedHeightFill", 0),
+                                                        "ExposedHeight1": warning.get("ExposedHeight1", 0),
                                                     }
                                                     warnings.append(converted_warning)
                         except Exception as e:
