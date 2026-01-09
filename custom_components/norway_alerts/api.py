@@ -282,15 +282,18 @@ class MetAlertsAPI(BaseWarningAPI):
     unifying all Norwegian geohazard services.
     """
     
-    def __init__(self, latitude: float, longitude: float, lang: str = "en"):
+    def __init__(self, latitude: float = None, longitude: float = None, county_id: str = None, county_name: str = None, lang: str = "en", test_mode: bool = False):
         """Initialize the MetAlerts API client.
         
-        Note: MetAlerts uses lat/lon instead of county_id, so we store these separately.
+        Can operate in two modes:
+        1. Location-based: Uses latitude/longitude for geographic filtering
+        2. County-based: Uses county_id for administrative filtering
         """
-        # Call parent with dummy county values since metalerts doesn't use counties
-        super().__init__("", "", lang)
+        # Call parent with county values (may be empty for lat/lon mode)
+        super().__init__(county_id or "", county_name or "", lang)
         self.latitude = latitude
         self.longitude = longitude
+        self.test_mode = test_mode
     
     def _get_warning_type(self) -> str:
         return "metalerts"
@@ -318,7 +321,18 @@ class MetAlertsAPI(BaseWarningAPI):
         Implementation adapted from met_alerts integration by @kutern84 and @svenove.
         Returns alerts converted to the common Varsom warning format.
         """
-        url = f"{API_BASE_METALERTS}/current.json?lat={self.latitude}&lon={self.longitude}&lang={self.lang}"
+        # Use test endpoint if in test mode
+        if self.test_mode:
+            url = f"{API_BASE_METALERTS}/example.json"
+            _LOGGER.info("Test mode: Using Met.no example endpoint: %s", url)
+        elif self.latitude is not None and self.longitude is not None:
+            # Coordinate-based filtering
+            url = f"{API_BASE_METALERTS}/current.json?lat={self.latitude}&lon={self.longitude}&lang={self.lang}"
+        elif self.county_id:
+            # County-based filtering
+            url = f"{API_BASE_METALERTS}/current.json?county={self.county_id}&lang={self.lang}"
+        else:
+            raise ValueError("MetAlerts requires either lat/lon coordinates or county_id")
         
         headers = {
             "Accept": "application/json",
@@ -447,12 +461,13 @@ class MetAlertsAPI(BaseWarningAPI):
 class WarningAPIFactory:
     """Factory for creating warning API clients."""
     
-    def __init__(self, county_id: str = "", county_name: str = "", latitude: float = None, longitude: float = None, lang: str = "en"):
+    def __init__(self, county_id: str = "", county_name: str = "", latitude: float = None, longitude: float = None, lang: str = "en", test_mode: bool = False):
         self.county_id = county_id
         self.county_name = county_name
         self.latitude = latitude
         self.longitude = longitude
         self.lang = lang
+        self.test_mode = test_mode
     
     def get_api(self, warning_type: str) -> BaseWarningAPI:
         """Create appropriate API client for warning type."""
@@ -463,9 +478,15 @@ class WarningAPIFactory:
         elif warning_type == "avalanche":
             return AvalancheAPI(self.county_id, self.county_name, self.lang)
         elif warning_type == "metalerts":
-            if self.latitude is None or self.longitude is None:
-                raise ValueError("Latitude and longitude are required for metalerts")
-            return MetAlertsAPI(self.latitude, self.longitude, self.lang)
+            # MetAlerts (weather) - supports both lat/lon and county
+            if self.latitude is not None and self.longitude is not None:
+                # Location-based mode
+                return MetAlertsAPI(latitude=self.latitude, longitude=self.longitude, lang=self.lang, test_mode=self.test_mode)
+            elif self.county_id:
+                # County-based mode  
+                return MetAlertsAPI(county_id=self.county_id, county_name=self.county_name, lang=self.lang, test_mode=self.test_mode)
+            else:
+                raise ValueError("MetAlerts requires either lat/lon coordinates or county_id")
         else:
             raise ValueError(f"Unknown warning type: {warning_type}")
     

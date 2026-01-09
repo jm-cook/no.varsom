@@ -256,7 +256,8 @@ class VarsomAlertsCoordinator(DataUpdateCoordinator):
                 county_name=self.county_name, 
                 latitude=self.latitude,
                 longitude=self.longitude,
-                lang=self.lang
+                lang=self.lang,
+                test_mode=self.test_mode
             )
             
             # Fetch warnings for the configured warning type

@@ -22,6 +22,12 @@ CONF_USE_LOCATION = "use_location"
 CONF_TEST_MODE = "test_mode"
 CONF_ENABLE_NOTIFICATIONS = "enable_notifications"
 CONF_NOTIFICATION_SEVERITY = "notification_severity"
+CONF_METALERTS_LOCATION_MODE = "metalerts_location_mode"
+
+# MetAlerts location modes
+METALERTS_MODE_LATLON = "latlon"
+METALERTS_MODE_COUNTY = "county"
+
 PLATFORMS = ["sensor"]
 
 # Notification settings
@@ -42,8 +48,8 @@ API_BASE_LANDSLIDE = "https://api01.nve.no/hydrology/forecast/landslide/v1.0.10/
 API_BASE_FLOOD = "https://api01.nve.no/hydrology/forecast/flood/v1.0.10/api"
 API_BASE_AVALANCHE = "https://api01.nve.no/hydrology/forecast/avalanche/v6.3.0"
 
-# Met.no API Base URL
-API_BASE_METALERTS = "https://api.met.no/weatherapi/metalerts/2.0"
+# Met.no API Base URL (using Home Assistant proxy)
+API_BASE_METALERTS = "https://aa015h6buqvih86i1.api.met.no/weatherapi/metalerts/2.0"
 
 # Warning types
 WARNING_TYPE_LANDSLIDE = "landslide"
