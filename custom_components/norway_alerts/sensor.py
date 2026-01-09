@@ -194,11 +194,11 @@ class VarsomAlertsCoordinator(DataUpdateCoordinator):
             
             # Use API factory to get appropriate API client and fetch warnings
             api_factory = WarningAPIFactory(
-                self.county_id, 
-                self.county_name, 
-                self.lang,
+                county_id=self.county_id, 
+                county_name=self.county_name, 
                 latitude=self.latitude,
-                longitude=self.longitude
+                longitude=self.longitude,
+                lang=self.lang
             )
             
             # Fetch warnings for the configured warning type
