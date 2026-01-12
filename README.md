@@ -48,6 +48,8 @@ All warnings unified in a clean, modern Home Assistant interface with automatic 
 - **Flexible configuration** - One sensor per warning type for clean separation
 - **Multiple location types** - County-based (NVE) or coordinates-based (Met.no)
 - **Activity levels** - Green (1), Yellow (2), Orange (3), Red (4), Black (5 for avalanche)
+- **Included blueprints** - Pre-built templates for displaying alerts (see [BLUEPRINTS.md](BLUEPRINTS.md))
+- **CAP format support** - Optional conversion of NVE warnings to CAP standard for unified display
 - **Rich alert data** - Warning text, advice, consequences, affected areas, validity periods
 - **Direct links** - Each alert links to detailed maps and information
 - **Bilingual** - Full Norwegian and English support
