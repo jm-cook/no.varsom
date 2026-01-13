@@ -20,12 +20,21 @@ class TestLandslideAPI:
         """Test successful fetch of landslide warnings."""
         api = LandslideAPI(county_id="46", county_name="Vestland", lang="en")
         
-        with patch("aiohttp.ClientSession.get") as mock_get:
+        # Mock the entire ClientSession to avoid thread creation
+        with patch("aiohttp.ClientSession") as mock_session_class:
+            mock_session = AsyncMock()
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.headers = {"Content-Type": "application/json"}
             mock_response.json = AsyncMock(return_value=mock_county_api_response)
-            mock_get.return_value.__aenter__.return_value = mock_response
+            
+            # Mock the context managers properly
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock()
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_session.get.return_value.__aexit__ = AsyncMock()
+            
+            mock_session_class.return_value = mock_session
             
             warnings = await api.fetch_warnings()
             
@@ -38,12 +47,19 @@ class TestLandslideAPI:
         """Test fetch when no warnings exist."""
         api = LandslideAPI(county_id="46", county_name="Vestland", lang="en")
         
-        with patch("aiohttp.ClientSession.get") as mock_get:
+        with patch("aiohttp.ClientSession") as mock_session_class:
+            mock_session = AsyncMock()
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.headers = {"Content-Type": "application/json"}
             mock_response.json = AsyncMock(return_value=[])
-            mock_get.return_value.__aenter__.return_value = mock_response
+            
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock()
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_session.get.return_value.__aexit__ = AsyncMock()
+            
+            mock_session_class.return_value = mock_session
             
             warnings = await api.fetch_warnings()
             
@@ -54,10 +70,17 @@ class TestLandslideAPI:
         """Test fetch when API returns error."""
         api = LandslideAPI(county_id="46", county_name="Vestland", lang="en")
         
-        with patch("aiohttp.ClientSession.get") as mock_get:
+        with patch("aiohttp.ClientSession") as mock_session_class:
+            mock_session = AsyncMock()
             mock_response = AsyncMock()
             mock_response.status = 500
-            mock_get.return_value.__aenter__.return_value = mock_response
+            
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock()
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_session.get.return_value.__aexit__ = AsyncMock()
+            
+            mock_session_class.return_value = mock_session
             
             warnings = await api.fetch_warnings()
             
@@ -72,12 +95,19 @@ class TestFloodAPI:
         """Test successful fetch of flood warnings."""
         api = FloodAPI(county_id="46", county_name="Vestland", lang="en")
         
-        with patch("aiohttp.ClientSession.get") as mock_get:
+        with patch("aiohttp.ClientSession") as mock_session_class:
+            mock_session = AsyncMock()
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.headers = {"Content-Type": "application/json"}
             mock_response.json = AsyncMock(return_value=mock_county_api_response)
-            mock_get.return_value.__aenter__.return_value = mock_response
+            
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock()
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_session.get.return_value.__aexit__ = AsyncMock()
+            
+            mock_session_class.return_value = mock_session
             
             warnings = await api.fetch_warnings()
             
@@ -102,40 +132,70 @@ class TestAvalancheAPI:
             }
         ]
         
-        with patch("aiohttp.ClientSession.get") as mock_get:
-            # First call returns summary, second returns details
+        with patch("aiohttp.ClientSession") as mock_session_class:
+            mock_session = AsyncMock()
+            
+            # First call returns summary
             mock_summary = AsyncMock()
             mock_summary.status = 200
             mock_summary.json = AsyncMock(return_value=summary_data)
             
+            # Second call returns details
             mock_detail = AsyncMock()
             mock_detail.status = 200
             mock_detail.json = AsyncMock(return_value=mock_avalanche_api_response)
             
-            mock_get.return_value.__aenter__.side_effect = [mock_summary, mock_detail]
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock()
             
-            warnings = await api.fetch_warnings()
+            # Create context manager mocks for get calls
+            mock_get_summary = AsyncMock()
+            mock_get_summary.__aenter__ = AsyncMock(return_value=mock_summary)
+            mock_get_summary.__aexit__ = AsyncMock()
             
-            assert len(warnings) == 1
-            assert warnings[0]["_warning_type"] == "avalanches"
-
-
-class TestMetAlertsAPI:
-    """Test MetAlertsAPI client."""
-
-    @pytest.mark.asyncio
-    async def test_fetch_warnings_lat_lon(self, mock_metalerts_api_response):
-        """Test fetch with latitude/longitude."""
-        api = MetAlertsAPI(latitude=60.39, longitude=5.32, lang="en")
-        
-        with patch("aiohttp.ClientSession.get") as mock_get:
+            mock_get_detail = AsyncMock()
+            mock_get_detail.__aenter__ = AsyncMock(return_value=mock_detail)
+            mock_get_detail.__aexit__ = AsyncMock()
+            
+            mock_session.get.side_effect = [mock_get_summary, mock_get_detail]
+            mock_session_class.return_val") as mock_session_class:
+            mock_session = AsyncMock()
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.headers = {"Content-Type": "application/json"}
             mock_response.json = AsyncMock(return_value=mock_metalerts_api_response)
-            mock_get.return_value.__aenter__.return_value = mock_response
+            
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock()
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_session.get.return_value.__aexit__ = AsyncMock()
+            
+            mock_session_class.return_value = mock_session
             
             warnings = await api.fetch_warnings()
+            
+            assert len(warnings) == 1
+            assert warnings[0]["event"] == "rain"
+            assert warnings[0]["ActivityLevel"] == "2"
+
+    @pytest.mark.asyncio
+    async def test_fetch_warnings_county(self, mock_metalerts_api_response):
+        """Test fetch with county ID."""
+        api = MetAlertsAPI(county_id="46", county_name="Vestland", lang="en")
+        
+        with patch("aiohttp.ClientSession") as mock_session_class:
+            mock_session = AsyncMock()
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.headers = {"Content-Type": "application/json"}
+            mock_response.json = AsyncMock(return_value=mock_metalerts_api_response)
+            
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock()
+            mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_session.get.return_value.__aexit__ = AsyncMock()
+            
+            mock_session_class.return_value = mock_session
             
             assert len(warnings) == 1
             assert warnings[0]["event"] == "rain"
