@@ -44,7 +44,6 @@ variables:
 
 sensor:
     name: "{{ sensor_name }}"
-    unique_id: "{{ sensor_name }}"
     state: "{{ state_attr(alert_sensor, 'active_alerts') | int(0) }}"
     attributes:
       formatted_content: "{% set alerts = state_attr(alert_sensor, 'alerts') %}\n\
