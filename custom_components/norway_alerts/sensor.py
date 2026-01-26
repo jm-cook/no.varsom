@@ -598,6 +598,29 @@ class NorwayAlertsSensor(CoordinatorEntity, SensorEntity):
         self._warning_type = warning_type
         self._municipality_filter = municipality_filter.strip()
         self._is_main = is_main
+        
+        # Load and cache the Jinja2 template to avoid blocking I/O in event loop
+        self._formatted_content_template = None
+        self._load_template()
+        
+        # Load and cache the Jinja2 template to avoid blocking I/O in event loop
+        self._formatted_content_template = None
+        self._load_template()
+    
+    def _load_template(self):
+        """Load the Jinja2 template during initialization (before event loop)."""
+        try:
+            template_dir = os.path.join(os.path.dirname(__file__), "templates")
+            env = Environment(loader=FileSystemLoader(template_dir))
+            self._formatted_content_template = env.get_template("formatted_content.j2")
+            _LOGGER.debug("Successfully loaded formatted_content.j2 template")
+        except Exception as err:
+            _LOGGER.error(
+                "Failed to load formatted_content.j2 template: %s. Formatted content will not be available.",
+                err,
+                exc_info=True
+            )
+            self._formatted_content_template = None
     
     def _add_metalert_attributes(self, alert_dict: dict, alert: dict) -> None:
         """Add MetAlerts-specific attributes to alert dict."""
@@ -727,63 +750,76 @@ class NorwayAlertsSensor(CoordinatorEntity, SensorEntity):
         return filtered
 
     def _generate_formatted_content(self, alerts):
-        """Generate markdown-formatted content for display using Jinja2 template.
+        """Generate markdown-formatted content for display using cached Jinja2 template.
         
         Only generates content for CAP-formatted alerts (weather alerts or NVE with CAP enabled).
-        Returns None for non-CAP sensors.
+        Returns None for non-CAP sensors or if template failed to load.
         """
         from datetime import datetime
         
-        # Only generate formatted content for CAP format sensors
-        if not self.coordinator.cap_format:
-            return None
-        
-        # Get display options from config entry
-        show_icon = self.coordinator.config_entry.options.get(CONF_SHOW_ICON, True)
-        show_status = self.coordinator.config_entry.options.get(CONF_SHOW_STATUS, True)
-        show_map = self.coordinator.config_entry.options.get(CONF_SHOW_MAP, True)
-        
-        # Enrich alerts with computed fields for template
-        enriched_alerts = []
-        for alert in alerts:
-            enriched = dict(alert)
+        try:
+            # Only generate formatted content for CAP format sensors
+            if not self.coordinator.cap_format:
+                return None
             
-            # Parse timestamps
-            starttime = alert.get("starttime", "")
-            endtime = alert.get("endtime", "")
-            if starttime and endtime:
-                try:
-                    start_dt = datetime.fromisoformat(starttime.replace("Z", "+00:00"))
-                    end_dt = datetime.fromisoformat(endtime.replace("Z", "+00:00"))
-                    enriched["starttime_timestamp"] = start_dt.timestamp()
-                    enriched["endtime_timestamp"] = end_dt.timestamp()
-                    enriched["start_formatted"] = start_dt.strftime("%A, %d %B kl. %H:%M")
-                    enriched["end_formatted"] = end_dt.strftime("%A, %d %B kl. %H:%M")
-                except (ValueError, AttributeError):
-                    pass
+            # Check if template loaded successfully
+            if self._formatted_content_template is None:
+                _LOGGER.warning(
+                    "Formatted content template not available. Check earlier logs for template loading errors."
+                )
+                return "Template not available. Check logs for errors."
             
-            # Handle area with municipality fallback
-            if not enriched.get("area") and alert.get("municipalities"):
-                municipalities = alert["municipalities"][:5]
-                area = ", ".join(municipalities)
-                if len(alert["municipalities"]) > 5:
-                    area += f" (+{len(alert['municipalities']) - 5} more)"
-                enriched["area"] = area
+            # Get display options from config entry
+            show_icon = self.coordinator.config_entry.options.get(CONF_SHOW_ICON, True)
+            show_status = self.coordinator.config_entry.options.get(CONF_SHOW_STATUS, True)
+            show_map = self.coordinator.config_entry.options.get(CONF_SHOW_MAP, True)
             
-            enriched_alerts.append(enriched)
-        
-        # Load and render template
-        template_dir = os.path.join(os.path.dirname(__file__), "templates")
-        env = Environment(loader=FileSystemLoader(template_dir))
-        template = env.get_template("formatted_content.j2")
-        
-        return template.render(
-            alerts=enriched_alerts,
-            show_icon=show_icon,
-            show_status=show_status,
-            show_map=show_map,
-            now_timestamp=datetime.now().timestamp()
-        )
+            # Enrich alerts with computed fields for template
+            enriched_alerts = []
+            for alert in alerts:
+                enriched = dict(alert)
+                
+                # Parse timestamps
+                starttime = alert.get("starttime", "")
+                endtime = alert.get("endtime", "")
+                if starttime and endtime:
+                    try:
+                        start_dt = datetime.fromisoformat(starttime.replace("Z", "+00:00"))
+                        end_dt = datetime.fromisoformat(endtime.replace("Z", "+00:00"))
+                        enriched["starttime_timestamp"] = start_dt.timestamp()
+                        enriched["endtime_timestamp"] = end_dt.timestamp()
+                        enriched["start_formatted"] = start_dt.strftime("%A, %d %B kl. %H:%M")
+                        enriched["end_formatted"] = end_dt.strftime("%A, %d %B kl. %H:%M")
+                    except (ValueError, AttributeError) as err:
+                        _LOGGER.debug("Failed to parse timestamps for alert: %s", err)
+                        pass
+                
+                # Handle area with municipality fallback
+                if not enriched.get("area") and alert.get("municipalities"):
+                    municipalities = alert["municipalities"][:5]
+                    area = ", ".join(municipalities)
+                    if len(alert["municipalities"]) > 5:
+                        area += f" (+{len(alert['municipalities']) - 5} more)"
+                    enriched["area"] = area
+                
+                enriched_alerts.append(enriched)
+            
+            # Render using cached template (no blocking I/O)
+            return self._formatted_content_template.render(
+                alerts=enriched_alerts,
+                show_icon=show_icon,
+                show_status=show_status,
+                show_map=show_map,
+                now_timestamp=datetime.now().timestamp()
+            )
+            
+        except Exception as err:
+            _LOGGER.error(
+                "Error generating formatted content: %s",
+                err,
+                exc_info=True
+            )
+            return f"Error generating formatted content: {err}"
 
     @property
     def device_info(self):
